@@ -3,8 +3,10 @@
 """ Test the command line interface """
 
 import os
+from pathlib import Path
 import sys
 import subprocess
+import tempfile
 import uuid
 import nbclient
 
@@ -134,8 +136,9 @@ class TestCLI(unittest.TestCase):
     def test_parameters_file(self, execute_patch):
         self.runner.invoke(
             papermill,
-            self.default_args
-            + ['-f', self.sample_yaml_file, '--parameters_file', self.sample_json_file],
+            self.default_args + [
+                '-f', self.sample_yaml_file, '--parameters_file', self.sample_json_file
+            ],
         )
         execute_patch.assert_called_with(
             **self.augment_execute_kwargs(
@@ -167,6 +170,31 @@ class TestCLI(unittest.TestCase):
         )
 
     @patch(cli.__name__ + '.execute_notebook')
+    def test_parameters_empty(self, execute_patch):
+        # "#empty" ---base64--> "I2VtcHR5"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            empty_yaml = Path(tmpdir) / 'empty.yaml'
+            empty_yaml.write_text('#empty')
+            self.runner.invoke(
+                papermill,
+                self.default_args
+                + [
+                    '--parameters_file',
+                    str(empty_yaml),
+                    '--parameters_yaml',
+                    '#empty',
+                    '--parameters_base64',
+                    'I2VtcHR5',
+                ],
+            )
+            execute_patch.assert_called_with(
+                **self.augment_execute_kwargs(
+                    # should be empty
+                    parameters={}
+                )
+            )
+
+    @patch(cli.__name__ + '.execute_notebook')
     def test_parameters_yaml_override(self, execute_patch):
         self.runner.invoke(
             papermill,
@@ -193,8 +221,7 @@ class TestCLI(unittest.TestCase):
     def test_parameters_base64(self, execute_patch):
         self.runner.invoke(
             papermill,
-            self.default_args
-            + [
+            self.default_args + [
                 '--parameters_base64',
                 'eyJmb28iOiAicmVwbGFjZWQiLCAiYmFyIjogMn0=',
                 '-b',
@@ -331,11 +358,18 @@ class TestCLI(unittest.TestCase):
         execute_patch.assert_not_called()
 
     @patch(cli.__name__ + '.execute_notebook')
+    @patch(cli.__name__ + '.display_notebook_help')
+    def test_help_notebook(self, display_notebook_help, execute_path):
+        self.runner.invoke(papermill, ['--help-notebook', 'input_path.ipynb'])
+        execute_path.assert_not_called()
+        assert display_notebook_help.call_count == 1
+        assert display_notebook_help.call_args[0][1] == 'input_path.ipynb'
+
+    @patch(cli.__name__ + '.execute_notebook')
     def test_many_args(self, execute_patch):
         self.runner.invoke(
             papermill,
-            self.default_args
-            + [
+            self.default_args + [
                 '-f',
                 self.sample_yaml_file,
                 '-y',

@@ -16,14 +16,14 @@ from contextlib import contextmanager
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from . import __version__
-from .log import logger
-from .utils import chdir
 from .exceptions import (
     PapermillException,
     PapermillRateLimitException,
     missing_dependency_generator,
     missing_environment_variable_generator,
 )
+from .log import logger
+from .utils import chdir
 
 try:
     from .s3 import S3
@@ -408,9 +408,13 @@ def load_notebook_node(notebook_path):
 
     """
     nb = nbformat.reads(papermill_io.read(notebook_path), as_version=4)
+    nb_upgraded = nbformat.v4.upgrade(nb)
+    if nb_upgraded is not None:
+        nb = nb_upgraded
 
     if not hasattr(nb.metadata, 'papermill'):
         nb.metadata['papermill'] = {
+            'default_parameters': dict(),
             'parameters': dict(),
             'environment_variables': dict(),
             'version': __version__,
@@ -422,6 +426,7 @@ def load_notebook_node(notebook_path):
 
         if not hasattr(cell.metadata, 'papermill'):
             cell.metadata['papermill'] = dict()
+
     return nb
 
 
